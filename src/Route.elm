@@ -12,7 +12,7 @@ type Route
 
 parse : Url -> Maybe Route
 parse url =
-    Just Top
+    Url.Parser.parse parser url
 
 
 parser : Parser (Route -> a) a
