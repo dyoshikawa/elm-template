@@ -6,34 +6,13 @@ import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Http
+import Json.Decode as D exposing (Decoder)
 import Page.Counter
+import Route exposing (Route)
 import Url exposing (Url)
+import Url.Builder
 import Url.Parser exposing ((</>), (<?>), Parser, int, map, oneOf, s, top)
 import Url.Parser.Query as Q
-
-
-type Route
-    = Top
-    | Login
-    | Articles (Maybe String)
-    | Article Int
-    | ArticleSettings Int
-
-
-routeParser : Parser (Route -> a) a
-routeParser =
-    oneOf
-        [ map Top top
-        , map Login (s "Login")
-        , map Articles (s "articles" <?> Q.string "search")
-        , map Article (s "articles" </> int)
-        , map ArticleSettings (s "articles" </> int </> s "settings")
-        ]
-
-
-urlToRoute : Url -> Maybe Route
-urlToRoute url =
-    Url.Parser.parse routeParser url
 
 
 
@@ -48,7 +27,7 @@ main =
         , update = update
         , subscriptions = subscriptions
         , onUrlChange = UrlChanged
-        , onUrlRequest = LinkClicked
+        , onUrlRequest = UrlRequested
         }
 
 
@@ -67,7 +46,7 @@ type Page
     | ErrorPage Http.Error
     | TopPage
     | UserPage (List Repo)
-    | ReoPage (List Issue)
+    | RepoPage (List Issue)
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
@@ -141,21 +120,88 @@ goTo maybeRoute model =
 
 
 
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.none
+
+
+
 -- VIEW
 
 
 view : Model -> Browser.Document Msg
 view model =
-    { title = "URL Intercepter"
+    { title = "My GitHub Viewer"
     , body =
-        [ b [] [ text "The current URL is: " ]
-        , ul []
-            [ viewLink "/home"
-            , viewLink "/profile"
-            , viewLink "/reviews/the-century-of-the-self"
-            ]
+        [ a [ href "/" ] [ h1 [] [ text "My GitHub Viewer" ] ]
+        , case model.page of
+            NotFound ->
+                viewNotFound
+
+            ErrorPage error ->
+                viewError error
+
+            TopPage ->
+                viewTopPage
+
+            UserPage repos ->
+                viewUserPage repos
+
+            RepoPage issues ->
+                viewRepoPage issues
         ]
     }
+
+
+viewNotFound : Html msg
+viewNotFound =
+    text "not found"
+
+
+viewError : Http.Error -> Html msg
+viewError error =
+    case error of
+        Http.BadBody message ->
+            pre [] [ text message ]
+
+        _ ->
+            text (Debug.toString error)
+
+
+viewTopPage : Html msg
+viewTopPage =
+    ul []
+        [ viewLink (Url.Builder.absolute [ "elm" ] [])
+        , viewLink (Url.Builder.absolute [ "evancz" ] [])
+        ]
+
+
+viewUserPage : List Repo -> Html msg
+viewUserPage repos =
+    ul []
+        (repos
+            |> List.map
+                (\repo ->
+                    viewLink (Url.Builder.absolute [ repo.owner, repo.name ] [])
+                )
+        )
+
+
+viewRepoPage : List Issue -> Html msg
+viewRepoPage issues =
+    ul [] (List.map viewIssue issues)
+
+
+viewIssue : Issue -> Html msg
+viewIssue issue =
+    li []
+        [ span [] [ text ("[" ++ issue.state ++ "]") ]
+        , span [] [ text ("#" ++ String.fromInt issue.number) ]
+        , span [] [ text issue.title ]
+        ]
 
 
 viewLink : String -> Html msg
@@ -164,9 +210,52 @@ viewLink path =
 
 
 
--- SUBSCRIPTION
+-- GITHUB
 
 
-subscriptions : Model -> Sub Msg
-subscriptions model =
-    Sub.none
+type alias Repo =
+    { name : String
+    , description : String
+    , language : Maybe String
+    , owner : String
+    , fork : Int
+    , star : Int
+    , watch : Int
+    }
+
+
+type alias Issue =
+    { number : Int
+    , title : String
+    , state : String
+    }
+
+
+reposDecoder : Decoder (List Repo)
+reposDecoder =
+    D.list repoDecoder
+
+
+repoDecoder : Decoder Repo
+repoDecoder =
+    D.map7 Repo
+        (D.field "name" D.string)
+        (D.field "description" D.string)
+        (D.maybe (D.field "language" D.string))
+        (D.at [ "owner", "login" ] D.string)
+        (D.field "forks_count" D.int)
+        (D.field "stargazers_count" D.int)
+        (D.field "watchers_count" D.int)
+
+
+issuesDecoder : Decoder (List Issue)
+issuesDecoder =
+    D.list issueDecoder
+
+
+issueDecoder : Decoder Issue
+issueDecoder =
+    D.map3 Issue
+        (D.field "number" D.int)
+        (D.field "title" D.string)
+        (D.field "state" D.string)
