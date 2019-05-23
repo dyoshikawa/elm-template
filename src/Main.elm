@@ -4,6 +4,7 @@ import Browser
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Page.Top exposing (view)
 import Route exposing (Route, parse)
 import Url
 
@@ -29,7 +30,7 @@ main =
 
 
 type Page
-    = TopPage
+    = TopPage Page.Top.Model
     | NotFound
 
 
@@ -51,6 +52,7 @@ init flags url key =
 type Msg
     = UrlRequested Browser.UrlRequest
     | UrlChanged Url.Url
+    | TopMsg Page.Top.Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -66,6 +68,10 @@ update msg model =
 
         UrlChanged url ->
             goTo (Route.parse url) model
+        
+        TopMsg topModel ->
+            let
+                (newTopModel, topCmd) = Page.Top.update topMsg topModel
 
 
 goTo : Maybe Route -> Model -> ( Model, Cmd Msg )
@@ -97,7 +103,7 @@ view model =
     , body =
         [ text "The current URL is: "
         , ul []
-            [ viewLink "/home"
+            [ viewLink "/"
             , viewLink "/profile"
             , viewLink "/reviews/the-century-of-the-self"
             , viewLink "/reviews/public-opinion"
@@ -108,7 +114,7 @@ view model =
                 h1 [] [ text "NotFound" ]
 
             TopPage ->
-                h1 [] [ text "TopPage" ]
+                Page.Top.view
         ]
     }
 
