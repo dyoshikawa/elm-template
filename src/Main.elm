@@ -1,12 +1,12 @@
-module Main exposing (Model, Msg(..), Page(..), goTo, init, main, subscriptions, update, view, viewLink)
+module Main exposing (Model, Msg(..), init, main, subscriptions, update, view, viewLink)
 
 import Browser
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
-import Page.Top exposing (view)
-import Route exposing (Route, parse)
 import Url
+import Url.Parser exposing ((</>), (<?>), Parser, int, map, oneOf, s, top)
+import Url.Parser.Query as Q
 
 
 
@@ -29,30 +29,41 @@ main =
 -- MODEL
 
 
-type Page
-    = TopPage Page.Top.Model
-    | NotFound
-
-
 type alias Model =
     { key : Nav.Key
-    , page : Page
+    , url : Url.Url
+    , route : Maybe Route
     }
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
-    Model key TopPage |> goTo (Route.parse url)
+    ( Model key url (Just Top), Cmd.none )
 
 
 
 -- UPDATE
 
 
+type Route
+    = Top
+
+
+routeParser : Parser (Route -> a) a
+routeParser =
+    oneOf
+        [ map Top top
+        ]
+
+
+urlToRoute : Url.Url -> Maybe Route
+urlToRoute url =
+    Url.Parser.parse routeParser url
+
+
 type Msg
     = UrlRequested Browser.UrlRequest
     | UrlChanged Url.Url
-    | TopMsg Page.Top.Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -67,21 +78,13 @@ update msg model =
                     ( model, Nav.load href )
 
         UrlChanged url ->
-            goTo (Route.parse url) model
-        
-        TopMsg topModel ->
             let
-                (newTopModel, topCmd) = Page.Top.update topMsg topModel
-
-
-goTo : Maybe Route -> Model -> ( Model, Cmd Msg )
-goTo maybeRoute model =
-    case maybeRoute of
-        Nothing ->
-            ( { model | page = NotFound }, Cmd.none )
-
-        Just Route.Top ->
-            ( { model | page = TopPage }, Cmd.none )
+                route =
+                    urlToRoute url
+            in
+            ( { model | url = url, route = route }
+            , Cmd.none
+            )
 
 
 
@@ -102,19 +105,21 @@ view model =
     { title = "URL Interceptor"
     , body =
         [ text "The current URL is: "
+        , b [] [ text (Url.toString model.url) ]
         , ul []
             [ viewLink "/"
+            , viewLink "/home"
             , viewLink "/profile"
             , viewLink "/reviews/the-century-of-the-self"
             , viewLink "/reviews/public-opinion"
             , viewLink "/reviews/shah-of-shahs"
             ]
-        , case model.page of
-            NotFound ->
-                h1 [] [ text "NotFound" ]
+        , case model.route of
+            Nothing ->
+                h1 [] [ text "Not Found" ]
 
-            TopPage ->
-                Page.Top.view
+            Just Top ->
+                h1 [] [ text "Top" ]
         ]
     }
 
