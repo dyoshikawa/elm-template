@@ -4,6 +4,8 @@ import Browser
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
+import Page.Counter exposing (Model, Msg, init, update, view)
+import Page.Top exposing (view)
 import Url
 import Url.Parser exposing ((</>), (<?>), Parser, int, map, oneOf, s, top)
 import Url.Parser.Query as Q
@@ -32,13 +34,13 @@ main =
 type alias Model =
     { key : Nav.Key
     , url : Url.Url
-    , route : Maybe Route
+    , page : Page
     }
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
-    ( Model key url (Just Top), Cmd.none )
+    ( Model key url TopPage, Cmd.none )
 
 
 
@@ -47,12 +49,14 @@ init flags url key =
 
 type Route
     = Top
+    | Counter
 
 
 routeParser : Parser (Route -> a) a
 routeParser =
     oneOf
         [ map Top top
+        , map Counter (s "counter")
         ]
 
 
@@ -61,9 +65,16 @@ urlToRoute url =
     Url.Parser.parse routeParser url
 
 
+type Page
+    = NotFound
+    | TopPage
+    | CounterPage Page.Counter.Model
+
+
 type Msg
     = UrlRequested Browser.UrlRequest
     | UrlChanged Url.Url
+    | CounterMsg Page.Counter.Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -82,9 +93,36 @@ update msg model =
                 route =
                     urlToRoute url
             in
-            ( { model | url = url, route = route }
-            , Cmd.none
-            )
+            goTo route model
+
+        CounterMsg counterMsg ->
+            case model.page of
+                CounterPage counterModel ->
+                    let
+                        ( newCounterModel, counterCmd ) =
+                            Page.Counter.update counterMsg counterModel
+                    in
+                    ( { model | page = CounterPage newCounterModel }, Cmd.map CounterMsg counterCmd )
+
+                _ ->
+                    ( model, Cmd.none )
+
+
+goTo : Maybe Route -> Model -> ( Model, Cmd Msg )
+goTo maybeRoute model =
+    case maybeRoute of
+        Nothing ->
+            ( { model | page = NotFound }, Cmd.none )
+
+        Just Top ->
+            ( { model | page = TopPage }, Cmd.none )
+
+        Just Counter ->
+            let
+                ( counterModel, counterCmd ) =
+                    Page.Counter.init
+            in
+            ( { model | page = CounterPage counterModel }, Cmd.map CounterMsg counterCmd )
 
 
 
@@ -108,18 +146,18 @@ view model =
         , b [] [ text (Url.toString model.url) ]
         , ul []
             [ viewLink "/"
-            , viewLink "/home"
-            , viewLink "/profile"
-            , viewLink "/reviews/the-century-of-the-self"
-            , viewLink "/reviews/public-opinion"
-            , viewLink "/reviews/shah-of-shahs"
+            , viewLink "/counter"
+            , viewLink "/notfound"
             ]
-        , case model.route of
-            Nothing ->
+        , case model.page of
+            NotFound ->
                 h1 [] [ text "Not Found" ]
 
-            Just Top ->
-                h1 [] [ text "Top" ]
+            TopPage ->
+                Page.Top.view
+
+            CounterPage counterModel ->
+                Page.Counter.view counterModel |> Html.map CounterMsg
         ]
     }
 
