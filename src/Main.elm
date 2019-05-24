@@ -33,14 +33,13 @@ main =
 
 type alias Model =
     { key : Nav.Key
-    , url : Url.Url
     , page : Page
     }
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
-    ( Model key url TopPage, Cmd.none )
+    ( Model key TopPage, Cmd.none )
 
 
 
@@ -143,7 +142,6 @@ view model =
     { title = "URL Interceptor"
     , body =
         [ text "The current URL is: "
-        , b [] [ text (Url.toString model.url) ]
         , ul []
             [ viewLink "/"
             , viewLink "/counter"
